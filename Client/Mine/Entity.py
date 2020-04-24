@@ -11,7 +11,7 @@ class PubKey:
             raise TypeError("require G1 type for pk!")
 
     def __str__(self):
-        return "pk: " + str(self.pk)
+        return str(self.pk)
 
 
 class PriKey:
@@ -24,7 +24,7 @@ class PriKey:
             raise TypeError("require int type for sk!")
 
     def __str__(self):
-        return "sk: " + str(self.sk)
+        return str(self.sk)
 
 
 class Key:
@@ -52,7 +52,7 @@ class TrapKey:
             raise TypeError("require G2 type for tk!")
 
     def __str__(self):
-        return "===== trapkey =====\n" + "tk: " + str(self.tk)
+        return str(self.tk)
 
 
 class ReKey:
@@ -65,7 +65,7 @@ class ReKey:
             raise TypeError("require G1 type for rk!")
 
     def __str__(self):
-        return "===== rekey =====\n" + "rk: " + str(self.rk)
+        return str(self.rk)
 
 
 class Token:

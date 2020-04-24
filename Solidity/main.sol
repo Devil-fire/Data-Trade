@@ -1,7 +1,5 @@
 pragma solidity ^0.4.24;
 
-import "browser/altbn128.sol";
-
 contract Controller {
 
     address[] private projects;
@@ -17,12 +15,13 @@ contract Controller {
     event newscheme(address);
 
     function createProject(uint256 bpk0,uint256 bpk1,
-    uint256 tw0, uint256 tw1, uint256 tw2, uint256 tw3) public
+    uint256 tw0, uint256 tw1, uint256 tw2, uint256 tw3) public returns(address)
     {
         address newProject = new scheme(bpk0, bpk1, tw0, tw1, tw2, tw3, cloud, msg.sender);
         projects.push(newProject);
         amount += 1;
         emit newscheme(newProject);
+        return newProject;
     }
 
     function getProjects() public view returns(address[])
@@ -169,10 +168,11 @@ contract scheme{
 	  uint256 rk0, uint256 rk1,
 	  uint256 c20, uint256 c21, uint256 c22, uint256 c23)
 	private
+	view
 	returns (bool)
 	{
-	    Curve.G1Point[] memory p1 = new Curve.G1Point[](2);
-	    Curve.G2Point[] memory p2 = new Curve.G2Point[](2);
+	    G1Point[] memory p1 = new G1Point[](2);
+	    G2Point[] memory p2 = new G2Point[](2);
 
         p1[0].X=c10;
         p1[0].Y=c11;
@@ -190,7 +190,7 @@ contract scheme{
         p2[1].Y[1]=c22;
         p2[1].Y[0]=c23;
 
-	    bool b = Curve.pairingProd2(p1[0], p2[0], Curve.g1neg(p1[1]), p2[1]);
+	    bool b = pairingProd2(p1[0], p2[0], g1neg(p1[1]), p2[1]);
 
 	    return b;
 	}
@@ -278,14 +278,14 @@ contract scheme{
         return (state);
     }
 
-    function compare1() private returns (bool)
+    function compare1() private view returns (bool)
     {
         bool b = Test(C1[0], C1[1], TK[0], TK[1], TK[2], TK[3],
                       RK[0], RK[1], C2[0], C2[1], C2[2], C2[3]);
         return b;
     }
 
-    function compare2() private returns (bool)
+    function compare2() private view returns (bool)
     {
         uint256 c4 = 0;
         for(uint i = 0; i < 12; i++){
@@ -303,7 +303,7 @@ contract scheme{
         }
     }
 
-    function uint2str(uint i) private returns (string c) {
+    function uint2str(uint i) pure private returns (string c) {
         if (i == 0) return "0";
         uint j = i;
         uint length;
@@ -319,5 +319,56 @@ contract scheme{
         }
         c = string(bstr);
     }
+
+	struct G1Point {
+		uint X;
+		uint Y;
+	}
+
+	struct G2Point {
+		uint[2] X;
+		uint[2] Y;
+	}
+
+	function g1neg(G1Point p) pure internal returns (G1Point) {
+		uint q = 21888242871839275222246405745257275088696311157297823662689037894645226208583;
+		if (p.X == 0 && p.Y == 0)
+			return G1Point(0, 0);
+		return G1Point(p.X, q - (p.Y % q));
+	}
+
+	function pairing(G1Point[] p1, G2Point[] p2) constant internal returns (bool) {
+		require(p1.length == p2.length);
+		uint elements = p1.length;
+		uint inputSize = elements * 6;
+		uint[] memory input = new uint[](inputSize);
+		for (uint i = 0; i < elements; i++)
+		{
+			input[i * 6 + 0] = p1[i].X;
+			input[i * 6 + 1] = p1[i].Y;
+			input[i * 6 + 2] = p2[i].X[0];
+			input[i * 6 + 3] = p2[i].X[1];
+			input[i * 6 + 4] = p2[i].Y[0];
+			input[i * 6 + 5] = p2[i].Y[1];
+		}
+		uint[1] memory out;
+		bool success;
+		assembly {
+			success := staticcall(sub(gas, 2000), 8, add(input, 0x20), mul(inputSize, 0x20), out, 0x20)
+			switch success case 0 { invalid }
+		}
+		require(success);
+		return out[0] != 0;
+	}
+
+	function pairingProd2(G1Point a1, G2Point a2, G1Point b1, G2Point b2) constant internal returns (bool) {
+		G1Point[] memory p1 = new G1Point[](2);
+		G2Point[] memory p2 = new G2Point[](2);
+		p1[0] = a1;
+		p1[1] = b1;
+		p2[0] = a2;
+		p2[1] = b2;
+		return pairing(p1, p2);
+	}
 
 }

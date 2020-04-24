@@ -3,6 +3,7 @@
 from PyQt5 import QtCore,QtGui,QtWidgets
 from PyQt5.QtWidgets import *
 from PyQt5.QtGui import *
+from PyQt5.Qt import QThread,pyqtSignal
 import sys,json,struct,os,time
 import qtawesome
 from PyQt5.uic import loadUi
@@ -10,7 +11,32 @@ import threading,socket
 from AES import keygen,encrypt,decrypt,ivgen
 from Mine.Scheme import MyScheme
 from Mine.Entity import Key,PriKey
+import tosolc
+from web3.auto import w3
+
 sch = MyScheme()
+class Thread_1(QThread):
+    signal = pyqtSignal()
+    def __init__(self,currentAccount,currentPassword):
+        super().__init__()
+        self.currentAccount = currentAccount
+        self.currentPassword = currentPassword
+        self.record = 0
+    def run(self):
+        while(True):
+            Contract1 = tosolc.getContract(tosolc.contract1_abi, "0x54114cEb519710ADb10778c0FE1DB774dA92A05A")
+            print(self.currentAccount,self.currentPassword)
+            amount = int(tosolc.getAmount(Contract1, self.currentAccount, self.currentPassword)) #获取有多少个子合约
+            print(amount)
+            if(amount > self.record):
+                self.record = amount
+                Contract2Address = tosolc.getProjects(Contract1, self.currentAccount, self.currentPassword)[amount-1]
+                self.Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
+                state = tosolc.getState(self.Contract2)
+                print("state: " + str(state))
+                if(int(state)==1):
+                    self.signal.emit()
+            time.sleep(5)
 
 class MainUi(QtWidgets.QMainWindow):
     def __init__(self, s1, s2):
@@ -18,9 +44,18 @@ class MainUi(QtWidgets.QMainWindow):
         self.s1 = s1
         self.s2 = s2
         self.init_ui()
+    def box(self):
+        reply = QMessageBox.information(self,"检测到搜索请求", "xxx发起了关于xxx的搜索", QMessageBox.Yes | QMessageBox.No)
+        if(reply == QMessageBox.Yes):
+            print(self.thread_1.Contract2)
+            rk = sch.ReKeyGen(keyB.pubkey, key_pres.prikey)
+            #permitSearch(Contract2, self.currentAccount, self.currentPassword, params)
+            #TODO:拿到买方pubkey计算rk
 
     def init_ui(self):
         global key_pres
+        self.currentAccount, self.currentPassword = tosolc.setAccount(w3.eth.accounts[0], 123456)
+
         if(not os.path.exists(os.getcwd()+'\\'+'key')):
             with open(os.getcwd()+'\\'+'key', 'w') as f:
                 key_pres = sch.KeyGen()
@@ -159,6 +194,9 @@ class MainUi(QtWidgets.QMainWindow):
         self.setAttribute(QtCore.Qt.WA_TranslucentBackground) # 设置窗口背景透明
         self.setWindowFlag(QtCore.Qt.FramelessWindowHint) # 隐藏边框
         self.main_layout.setSpacing(0)
+        self.thread_1 = Thread_1(self.currentAccount,self.currentPassword)
+        self.thread_1.signal.connect(self.box)
+        self.thread_1.start()
     def addrow(self, item_name,item_size, item_price):
         row = self.tableWidget.rowCount()
         self.tableWidget.insertRow(row)
@@ -188,7 +226,13 @@ class MainUi(QtWidgets.QMainWindow):
         QMessageBox.about(self, "反馈bug", "不行，我没有bug，不能反馈")
     def search_impl(self):
         Tw = sch.Trapdoor(key_pres.prikey, self.right_bar_widget_search_input.text())
-        #TODO:把TW放在智能合约
+        param=list(map(int, str(key_pres.pubkey).replace(')','').replace('(','').replace(',','').split(' ')))
+        Tw = list(map(int, str(Tw).replace(')','').replace('(','').replace(',','').split(' ')))
+        param = param + Tw
+        #TODO:把Tw放在智能合约
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0x54114cEb519710ADb10778c0FE1DB774dA92A05A")
+        print(param)
+        tosolc.createProject(Contract1, self.currentAccount, self.currentPassword, param) #发送请求并创建子合约
 
 def send_data(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5):
     thread = threading.Thread(target=send_data_impl, name=None,  args=(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5)) 
