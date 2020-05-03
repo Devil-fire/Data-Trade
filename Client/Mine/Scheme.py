@@ -98,6 +98,9 @@ class MyScheme(PRES):
     def Test(self, cipher: Cipher, Tw: TrapKey, rk: ReKey):
         return (bn.pairing(Tw.tk, cipher.c1) == bn.pairing(cipher.c2, rk.rk))
 
+    def Test2(self, pubkey: PubKey, Hw, Tw: TrapKey):
+        return bn.pairing(Hw, pubkey.pk) == bn.pairing(Tw.tk, bn.G1)
+
     def Dec(self, cipher: Cipher, prikey: PriKey, hashtable: dict):
         if not isinstance(cipher, Cipher):
             raise TypeError("")

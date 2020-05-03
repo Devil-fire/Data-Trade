@@ -278,6 +278,40 @@ contract scheme{
         return (state);
     }
 
+    function GetPubkey()
+    public
+    view
+    returns(uint256[2])
+    {
+        return (buyerpk);
+    }
+
+    function GetTrapdoor()
+    public
+    view
+    returns(uint256[4])
+    {
+        return (TW);
+    }
+
+    function GetReKey()
+    public
+    cloudonly
+    view
+    returns(uint256[2])
+    {
+        return (RK);
+    }
+
+    function GetToken()
+    public
+    cloudonly
+    view
+    returns(uint256[4])
+    {
+        return (TK);
+    }
+
     function compare1() private view returns (bool)
     {
         bool b = Test(C1[0], C1[1], TK[0], TK[1], TK[2], TK[3],

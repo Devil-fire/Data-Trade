@@ -78,7 +78,7 @@ class Token:
             raise TypeError("require G2 type for tk!")
 
     def __str__(self):
-        return "===== token =====\n" + "tk: " + str(self.tk)
+        return str(self.tk)
 
 
 class Cipher:
@@ -136,5 +136,4 @@ class CipherI(Cipher):
             raise TypeError("require (G1,G2,FQ12,FQ12) for second-level ciphertext!")
 
     def __str__(self):
-        return "===== cipherI =====\n" + "c1: " + str(self.c1) + "\nc2: " + str(
-            self.c2) + "\nc3: " + str(self.c3) + "\nc4: " + str(self.c4)
+        return str(self.c1) +' '+ str(self.c2) +' '+ str(self.c3) +' '+ str(self.c4)
