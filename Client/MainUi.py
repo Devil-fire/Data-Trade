@@ -12,7 +12,6 @@ from AES import keygen,encrypt,decrypt,ivgen
 from Mine.Scheme import MyScheme
 from Mine.Entity import Key,PriKey,PubKey,TrapKey,CipherI
 import tosolc
-from web3.auto import w3
 from py_ecc import bn128 as bn
 import py_ecc
 
@@ -30,7 +29,7 @@ class Thread_1(QThread):
     def run(self):
         while(True):
             threadLock.acquire()
-            Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
+            Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
             print(self.currentAccount,self.currentPassword)
             amount = int(tosolc.getAmount(Contract1, self.currentAccount, self.currentPassword)) #获取有多少个子合约
             print(amount)
@@ -48,12 +47,13 @@ class Thread_1(QThread):
 
 def process_search_impl(search_amount, currentAccount, currentPassword):
     while(True):
-        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
-        if(int(tosolc.getAmount(Contract1, currentAccount, currentPassword))==search_amount+1):
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
+        print(search_amount,int(tosolc.getAmount(Contract1, currentAccount, currentPassword)))
+        if(int(tosolc.getAmount(Contract1, currentAccount, currentPassword))==search_amount):
             break
 
-    Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
-    Contract2Address = tosolc.getProjects(Contract1, currentAccount, currentPassword)[search_amount]
+    Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
+    Contract2Address = tosolc.getProjects(Contract1, currentAccount, currentPassword)[search_amount-1]
     Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
     print(search_amount-1)
     while(True):
@@ -61,7 +61,7 @@ def process_search_impl(search_amount, currentAccount, currentPassword):
         print("kkk  "+str(search_amount)+'  '+str(state))
         if(int(state)==3):
             value = tosolc.getPrice(Contract2, currentAccount, currentPassword)
-            print(value)
+            print(Contract2Address)
             tosolc.pay(Contract2, currentAccount, currentPassword, value)
             break
         time.sleep(2)
@@ -113,7 +113,7 @@ class MainUi(QtWidgets.QMainWindow):
 
     def init_ui(self):
         global key_pres
-        self.currentAccount, self.currentPassword = tosolc.setAccount(w3.eth.accounts[1], 123456789)
+        self.currentAccount, self.currentPassword = tosolc.setAccount(tosolc.xzb_ad, tosolc.xzb_sk)
 
         if(not os.path.exists(os.getcwd()+'\\'+'key')):
             with open(os.getcwd()+'\\'+'key', 'w') as f:
@@ -290,7 +290,7 @@ class MainUi(QtWidgets.QMainWindow):
         Tw = list(map(int, str(Tw).replace(')','').replace('(','').replace(',','').split(' ')))
         param = param + Tw
         #TODO:把Tw放在智能合约
-        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
         tosolc.createProject(Contract1, self.currentAccount, self.currentPassword, param) #发送请求并创建子合约
         search_amount = tosolc.getAmount(Contract1, self.currentAccount, self.currentPassword)
         thread = threading.Thread(target=process_search_impl, name=None,  args=(search_amount, self.currentAccount, self.currentPassword)) 
@@ -306,6 +306,9 @@ class MainUi(QtWidgets.QMainWindow):
         emptytable = {}
         m = sch.Dec(cipheri, key_pres.prikey, emptytable)
         print(m)
+        Contract2Address = tosolc.getProjects(Contract1, self.currentAccount, self.currentPassword)[search_amount-1]
+        Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
+        #tosolc.confirm(Contract2,self.currentAccount, self.currentPassword)
 
 def send_data(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5):
     thread = threading.Thread(target=send_data_impl, name=None,  args=(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5)) 

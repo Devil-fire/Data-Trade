@@ -9,7 +9,6 @@ import threading
 from Mine.Scheme import MyScheme
 from Mine.Entity import Key,PriKey,PubKey,TrapKey,CipherII,ReKey,Token
 import tosolc
-from web3.auto import w3
 from ctypes import c_char_p
 buffsize = 10240
 class wanttosend:
@@ -20,13 +19,13 @@ sch = MyScheme()
 def check(currentAccount, currentPassword,sharestr,cipheri):
     db = pymysql.connect(host='123.56.160.68', port=3306, user='root', passwd='123456', db='data-trade', charset='utf8')
     cursor = db.cursor()
-    Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
+    Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
     print(currentAccount,currentPassword)
     amount = int(tosolc.getAmount(Contract1, currentAccount, currentPassword)) #获取有多少个子合约
     record = amount
     search_filename = ''
     while(True):
-        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xe7077D135465EdFCc4E76921fbfe5cFba9078E2F")
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
         print(currentAccount,currentPassword)
         amount = int(tosolc.getAmount(Contract1, currentAccount, currentPassword)) #获取有多少个子合约
         print(amount)
@@ -59,7 +58,7 @@ def check(currentAccount, currentPassword,sharestr,cipheri):
                             if(reth):
                                 params = []
                                 params.append(sch.hashfromCipherII(cipherii))
-                                print(int(data[i][1]))
+                                print(sch.hashfromCipherII(cipherii))
                                 params.append(int(data[i][1]))
                                 tosolc.searchDone(Contract2, currentAccount, currentPassword, params)
                                 state = tosolc.getState(Contract2)
@@ -77,6 +76,7 @@ def check(currentAccount, currentPassword,sharestr,cipheri):
                                     tosolc.sendc2(Contract2, currentAccount, currentPassword, cipheri_list[2:6])
                                     tosolc.sendc3(Contract2, currentAccount, currentPassword, cipheri_list[6:18])
                                     tosolc.sendc4(Contract2, currentAccount, currentPassword, cipheri_list[18:])
+                                    tosolc.getMoney(Contract2, currentAccount, currentPassword)
                                     sharestr.value = str(tosolc.getPubkey(Contract2, currentAccount, currentPassword))
                                     cipheri.value = str(cipheri_u)
         time.sleep(1)
@@ -188,7 +188,7 @@ if __name__ == '__main__':
     sharestr=manager.Value(c_char_p,'')
     cipheri=manager.Value(c_char_p,'')
 
-    currentAccount, currentPassword = tosolc.setAccount(w3.eth.accounts[0], 123456)
+    currentAccount, currentPassword = tosolc.setAccount(tosolc.xzb_ad, tosolc.xzb_sk)
     lock = Lock()
     s = socket(AF_INET, SOCK_STREAM)
     host = "127.0.0.1"
