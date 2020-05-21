@@ -8,7 +8,7 @@ w3 = Web3(HTTPProvider(ropsten_from_infura))
 false = False
 true = True
 gas = 3000000
-gasprice = w3.toWei('1', 'gwei')
+gasprice = w3.toWei('10', 'gwei')
 ropsten = 3
 
 contract1_abi = [

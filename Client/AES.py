@@ -2,14 +2,14 @@ from Crypto.Cipher import AES
 from binascii import b2a_hex, a2b_hex
 import string
 import random
-import os
+import os,time
 def keygen(method):
     if(method=='AES-128'):
-        key = ''.join(random.sample(string.ascii_letters + string.digits, 16))
+        key = ''.join(random.sample(string.ascii_letters + string.digits, 16)).encode('utf-8')
     elif(method=='AES-192'):
-        key = ''.join(random.sample(string.ascii_letters + string.digits, 24))
+        key = ''.join(random.sample(string.ascii_letters + string.digits, 24)).encode('utf-8')
     elif(method=='AES-256'):
-        key = ''.join(random.sample(string.ascii_letters + string.digits, 32))
+        key = ''.join(random.sample(string.ascii_letters + string.digits, 32)).encode('utf-8')
     else:
         key='error'
     return key
@@ -34,9 +34,3 @@ def decrypt(filename,key):
         cryptos = AES.new(key, mode, iv)
         plain_data = cryptos.decrypt(data)
         f2.write(plain_data)
-
-
-if __name__ == '__main__':
-    #key=keygen('AES-128')
-    #encrypt('1.MP4',b'fOUKYXDQtdzcZn0k')
-    decrypt('enc重走徐老院长初心路 社会实践视频.mp4',b'JUX02BtYLpPoO5QW')

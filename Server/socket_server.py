@@ -16,7 +16,7 @@ class wanttosend:
 
 wanttosend = wanttosend()
 sch = MyScheme()
-def check(currentAccount, currentPassword,sharestr,cipheri):
+def check(currentAccount, currentPassword,sharestr,cipheri,send_filename):
     db = pymysql.connect(host='123.56.160.68', port=3306, user='root', passwd='123456', db='data-trade', charset='utf8')
     cursor = db.cursor()
     Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
@@ -44,14 +44,13 @@ def check(currentAccount, currentPassword,sharestr,cipheri):
                 rk = tosolc.getReKey(Contract2, currentAccount, currentPassword)
                 #print(rk)
                 rk = ReKey((py_ecc.fields.bn128_FQ(int(rk[0])),py_ecc.fields.bn128_FQ(int(rk[1]))))
-                sql = "select filename,price,cipherii1,cipherii2,cipherii3,cipherii4,cipherii5 from filerecord"
+                sql = "select user,filename,price,cipherii1,cipherii2,cipherii3,cipherii4,cipherii5 from filerecord"
                 cursor.execute(sql)
                 data = cursor.fetchall()
                 for i in range(0, len(data)):
                     search_filename = data[i][0]
-                    for j in range(2, 7):
+                    for j in range(3, 7):
                         if(data[i][j] != None):
-                            #print(strtocipherii(data[i][j]))
                             cipherii = strtocipherii(data[i][j])
                             reth = sch.Search(cipherii, Tw, rk)
                             print(reth)
@@ -59,7 +58,7 @@ def check(currentAccount, currentPassword,sharestr,cipheri):
                                 params = []
                                 params.append(sch.hashfromCipherII(cipherii))
                                 print(sch.hashfromCipherII(cipherii))
-                                params.append(int(data[i][1]))
+                                params.append(int(data[i][2]))
                                 tosolc.searchDone(Contract2, currentAccount, currentPassword, params)
                                 state = tosolc.getState(Contract2)
                                 while(int(state)!=4):
@@ -76,9 +75,10 @@ def check(currentAccount, currentPassword,sharestr,cipheri):
                                     tosolc.sendc2(Contract2, currentAccount, currentPassword, cipheri_list[2:6])
                                     tosolc.sendc3(Contract2, currentAccount, currentPassword, cipheri_list[6:18])
                                     tosolc.sendc4(Contract2, currentAccount, currentPassword, cipheri_list[18:])
-                                    tosolc.getMoney(Contract2, currentAccount, currentPassword)
+                                    #tosolc.getMoney(Contract2, currentAccount, currentPassword)
                                     sharestr.value = str(tosolc.getPubkey(Contract2, currentAccount, currentPassword))
                                     cipheri.value = str(cipheri_u)
+                                    send_filename.value = str(data[i][1])
         time.sleep(1)
 
 def strtocipherii(str):
@@ -142,17 +142,34 @@ def recv(c1,public,cursor,db):
             recv_len += len(recv_mesg)
             f.write(recv_mesg)
     f.close()
-    c1.close()
+    #c1.close()
     print("fileend")
-def send_cipheri(c1,public,sharestr,cipheri):
+def send_cipherifile(c1,c2,public,sharestr,cipheri,send_filename):
     while(True):
         #print(public[1:-1])
         if(public[1:-1]==sharestr.value[1:-1]):
             print(type(c1))
             c1.send(cipheri.value.encode('utf-8'))
+
+            name = hashlib.md5(public.encode("utf-8")).hexdigest()
+            fileName = send_filename.value
+            filesize_bytes = os.path.getsize(os.getcwd()+'\\'+name+'\\'+fileName)
+            dirc = {
+                'filename': fileName,
+                'filesize_bytes': filesize_bytes
+            }
+            head_info = json.dumps(dirc)
+            head_info_len = struct.pack('i', len(head_info))
+            c2.send(head_info_len)
+            c2.send(head_info.encode('utf-8'))
+            f=open(os.getcwd()+'\\'+name+'\\'+fileName,'rb')
+            data=f.read(83886080)
+            while data:
+                c2.sendall(data)
+                data=f.read(83886080)
             break
         time.sleep(5)
-def process_op(lock,c1,c2,addr,sharestr,cipheri):
+def process_op(lock,c1,c2,addr,sharestr,cipheri,send_filename):
     public=''
     db = pymysql.connect(host='123.56.160.68', port=3306, user='root', passwd='123456', db='data-trade', charset='utf8')
     cursor = db.cursor()
@@ -169,11 +186,12 @@ def process_op(lock,c1,c2,addr,sharestr,cipheri):
                 sql = "insert into info(public) values ('{0}')".format(public)
                 cursor.execute(sql)
                 db.commit()
-            thread = threading.Thread(target=send_cipheri,args=(c1,public,sharestr,cipheri))
+            thread = threading.Thread(target=send_cipherifile,args=(c1,c2,public,sharestr,cipheri,send_filename))
             thread.start()
         elif(op=='quit'):
             print('quit')
             c1.close()
+            c2.close()
             break
         elif(op=='file'):
             thread = threading.Thread(target=recv,args=(c2,public,cursor,db))
@@ -187,6 +205,7 @@ if __name__ == '__main__':
     manager = Manager()
     sharestr=manager.Value(c_char_p,'')
     cipheri=manager.Value(c_char_p,'')
+    send_filename = manager.Value(c_char_p,'')
 
     currentAccount, currentPassword = tosolc.setAccount(tosolc.xzb_ad, tosolc.xzb_sk)
     lock = Lock()
@@ -199,14 +218,14 @@ if __name__ == '__main__':
     port = 9999
     fi.bind((host, port))
     fi.listen(5)
-    thread = threading.Thread(target=check,args=(currentAccount, currentPassword,sharestr,cipheri))
+    thread = threading.Thread(target=check,args=(currentAccount, currentPassword,sharestr,cipheri,send_filename))
     thread.start()
     while True:
         c1,addr = s.accept()
         print ('连接地址：', c1)
         c2,addr = fi.accept()
         print ('连接地址：', c2)
-        p = Process(target=process_op, args=(lock,c1,c2,addr,sharestr,cipheri))
+        p = Process(target=process_op, args=(lock,c1,c2,addr,sharestr,cipheri,send_filename))
         p.start()
         c1.close()
         c2.close()

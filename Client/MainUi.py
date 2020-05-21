@@ -18,6 +18,7 @@ import py_ecc
 hashtable = {}
 sch = MyScheme()
 threadLock = threading.Lock()
+buffsize = 10240
 
 class Thread_1(QThread):
     signal = pyqtSignal()
@@ -45,33 +46,113 @@ class Thread_1(QThread):
             threadLock.release()
             time.sleep(5)
 
-def process_search_impl(search_amount, currentAccount, currentPassword):
-    while(True):
-        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
-        print(search_amount,int(tosolc.getAmount(Contract1, currentAccount, currentPassword)))
-        if(int(tosolc.getAmount(Contract1, currentAccount, currentPassword))==search_amount):
-            break
+class Thread_2(QThread):
+    signal1 = pyqtSignal()
+    signal2 = pyqtSignal()
+    def __init__(self,s1,s2,currentAccount,currentPassword, right_bar_widget_search_input):
+        super().__init__()
+        self.currentAccount = currentAccount
+        self.currentPassword = currentPassword
+        self.right_bar_widget_search_input = right_bar_widget_search_input
+        self.s1 = s1
+        self.s2 = s2
+        self.record = 0
+    def process_search_impl(self,search_amount, currentAccount, currentPassword):
+        while(True):
+            Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
+            print(search_amount,int(tosolc.getAmount(Contract1, currentAccount, currentPassword)))
+            if(int(tosolc.getAmount(Contract1, currentAccount, currentPassword))==search_amount):
+                break
 
-    Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
-    Contract2Address = tosolc.getProjects(Contract1, currentAccount, currentPassword)[search_amount-1]
-    Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
-    print(search_amount-1)
-    while(True):
-        state = tosolc.getState(Contract2)
-        print("kkk  "+str(search_amount)+'  '+str(state))
-        if(int(state)==3):
-            value = tosolc.getPrice(Contract2, currentAccount, currentPassword)
-            print(Contract2Address)
-            tosolc.pay(Contract2, currentAccount, currentPassword, value)
-            break
-        time.sleep(2)
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
+        Contract2Address = tosolc.getProjects(Contract1, currentAccount, currentPassword)[search_amount-1]
+        self.Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
+        print(search_amount-1)
+        while(True):
+            state = tosolc.getState(self.Contract2)
+            print("kkk  "+str(search_amount)+'  '+str(state))
+            if(int(state)==3):
+                self.signal2.emit()
+                break
+            time.sleep(2)
+    def run(self):
+        Tw = sch.Trapdoor(key_pres.prikey, self.right_bar_widget_search_input.text())
+        self.right_bar_widget_search_input.setText("")
+        param=list(map(int, str(key_pres.pubkey).replace(')','').replace('(','').replace(',','').split(' ')))
+        Tw = list(map(int, str(Tw).replace(')','').replace('(','').replace(',','').split(' ')))
+        param = param + Tw
+        #TODO:把Tw放在智能合约
+        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
+        print('end')
+        tosolc.createProject(Contract1, self.currentAccount, self.currentPassword, param) #发送请求并创建子合约
+        search_amount = tosolc.getAmount(Contract1, self.currentAccount, self.currentPassword)
+        thread = threading.Thread(target=self.process_search_impl, name=None,  args=(search_amount, self.currentAccount, self.currentPassword)) 
+        thread.start()
+        cipheri_str = self.s1.recv(4000).decode('utf-8')
+        cipheri = list(map(int, cipheri_str.replace(')','').replace('(','').replace(',','').split(' ')))
+        c1_1=(py_ecc.fields.bn128_FQ(int(cipheri[0])),py_ecc.fields.bn128_FQ(int(cipheri[1])))
+        c1_2=(py_ecc.fields.bn128_FQ2((py_ecc.fields.bn128_FQ(int(cipheri[2])),py_ecc.fields.bn128_FQ(int(cipheri[3]))))\
+            ,py_ecc.fields.bn128_FQ2((py_ecc.fields.bn128_FQ(int(cipheri[4])),py_ecc.fields.bn128_FQ(int(cipheri[5])))))
+        c1_3=bn.FQ12(cipheri[6:18])
+        c1_4=bn.FQ12(cipheri[18:])
+        cipheri = CipherI(c1_1,c1_2,c1_3,c1_4)
+        emptytable = {}
+        m = sch.Dec(cipheri, key_pres.prikey, emptytable)
+        head_struct = self.s2.recv(4)
+        head_len = struct.unpack('i', head_struct)[0]
+        data = self.s2.recv(head_len)
+        head_dir = json.loads(data.decode('utf-8'))
+        filesize_b = head_dir['filesize_bytes']
+        filename = head_dir['filename']
+        f = open(filename, 'ab+')
+        print(filesize_b)
+        recv_len = 0
+        while recv_len < filesize_b:
+            percent = recv_len / filesize_b
+            if filesize_b - recv_len > buffsize:
+                recv_mesg = self.s2.recv(buffsize)
+                f.write(recv_mesg)
+                recv_len += len(recv_mesg)
+            else:
+                recv_mesg = self.s2.recv(filesize_b - recv_len)
+                recv_len += len(recv_mesg)
+                f.write(recv_mesg)
+        f.close()
+        decrypt(filename,str(m).encode('utf-8'))
+        self.signal1.emit()
+        Contract2Address = tosolc.getProjects(Contract1, self.currentAccount, self.currentPassword)[search_amount-1]
+        self.Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
 
 class MainUi(QtWidgets.QMainWindow):
+    signal = pyqtSignal()
     def __init__(self, s1, s2):
         super().__init__()
         self.s1 = s1
         self.s2 = s2
         self.init_ui()
+    def box_process(self,pubkey,pubkey1,key_pres,Contract2,Tw1):
+        rk = sch.ReKeyGen(pubkey1, key_pres.prikey)
+        print("rk",list(map(int, str(rk).replace(')','').replace('(','').replace(',','').split(' '))))
+        params = pubkey + list(map(int, str(rk).replace(')','').replace('(','').replace(',','').split(' ')))
+        tosolc.permitSearch(Contract2, self.currentAccount, self.currentPassword, params)
+        threadLock.acquire()
+            #TODO：处理该请求
+        state = tosolc.getState(Contract2)
+        while(int(state)!=6):
+            state = tosolc.getState(Contract2)
+        if(int(state)==6):
+            hashofc3 = tosolc.getHashofc3(Contract2, self.currentAccount, self.currentPassword)
+            tk = sch.TokenGen(key_pres.prikey, hashtable[hashofc3], Tw1)
+            params = list(map(int, str(tk).replace(')','').replace('(','').replace(',','').split(' ')))
+            tosolc.permitReEnc(Contract2, self.currentAccount, self.currentPassword, params)
+            print("perimitReEnc")
+        while(int(state)!=7):
+            state = tosolc.getState(Contract2)
+        if(int(state)==7):
+            self.signal.emit()
+        threadLock.release()
+    def recv_money():
+        QMessageBox.about(self, "收到钱", "您已收到钱")
     def box(self):
         Contract2 = self.thread_1.Contract2
         test2 = False
@@ -87,34 +168,16 @@ class MainUi(QtWidgets.QMainWindow):
             print(test2)
             if(test2):
                 break'''
-
         #if(test2):
         reply = QMessageBox.information(self,"检测到搜索请求", "xxx发起了关于xxx的搜索", QMessageBox.Yes | QMessageBox.No)
         if(reply == QMessageBox.Yes):
             #拿到买方pubkey计算rk
-            rk = sch.ReKeyGen(pubkey1, key_pres.prikey)
-            print("rk",list(map(int, str(rk).replace(')','').replace('(','').replace(',','').split(' '))))
-            params = pubkey + list(map(int, str(rk).replace(')','').replace('(','').replace(',','').split(' ')))
-            tosolc.permitSearch(Contract2, self.currentAccount, self.currentPassword, params)
-            threadLock.acquire()
-            #TODO：处理该请求
-            state = tosolc.getState(Contract2)
-            while(int(state)!=6):
-                state = tosolc.getState(Contract2)
-            if(int(state)==6):
-                hashofc3 = tosolc.getHashofc3(Contract2, self.currentAccount, self.currentPassword)
-                print(hashofc3)
-                print(type(hashofc3))
-                tk = sch.TokenGen(key_pres.prikey, hashtable[hashofc3], Tw1)
-                params = list(map(int, str(tk).replace(')','').replace('(','').replace(',','').split(' ')))
-                tosolc.permitReEnc(Contract2, self.currentAccount, self.currentPassword, params)
-                print("perimitReEnc")
-            threadLock.release()
+            thread = threading.Thread(target=self.box_process, name=None,  args=(pubkey,pubkey1,key_pres,Contract2,Tw1)) 
+            thread.start() 
 
     def init_ui(self):
         global key_pres
         self.currentAccount, self.currentPassword = tosolc.setAccount(tosolc.xzb_ad, tosolc.xzb_sk)
-
         if(not os.path.exists(os.getcwd()+'\\'+'key')):
             with open(os.getcwd()+'\\'+'key', 'w') as f:
                 key_pres = sch.KeyGen()
@@ -255,7 +318,23 @@ class MainUi(QtWidgets.QMainWindow):
         self.main_layout.setSpacing(0)
         self.thread_1 = Thread_1(self.currentAccount,self.currentPassword)
         self.thread_1.signal.connect(self.box)
+        self.thread_2 = Thread_2(self.s1,self.s2,self.currentAccount,self.currentPassword,self.right_bar_widget_search_input)
+        self.thread_2.signal1.connect(self.search_box)
+        self.thread_2.signal2.connect(self.pay_box)
+        self.signal.connect(self.recv_money)
         self.thread_1.start()
+    def search(self):
+        self.thread_2.start()
+    def pay_box(self):
+        value = tosolc.getPrice(self.thread_2.Contract2, self.currentAccount, self.currentPassword)
+        string = "价格为："+str(value)
+        reply = QMessageBox.information(self,"请付款", string, QMessageBox.Yes | QMessageBox.No)
+        if(reply == QMessageBox.Yes):
+            tosolc.pay(self.thread_2.Contract2, self.currentAccount, self.currentPassword, value)
+    def search_box(self):
+        reply = QMessageBox.information(self,"完毕", "您已收到文件，请确认收货", QMessageBox.Yes | QMessageBox.No)
+        if(reply == QMessageBox.Yes):
+            tosolc.confirm(self.thread_2.Contract2,self.currentAccount, self.currentPassword)
     def addrow(self, item_name,item_size, item_price):
         row = self.tableWidget.rowCount()
         self.tableWidget.insertRow(row)
@@ -274,48 +353,21 @@ class MainUi(QtWidgets.QMainWindow):
     def selldata(self):
         self.ChooseFile = ChooseFileWindow(self.s1, self.s2)
         self.ChooseFile.show()
-    def search(self):
-        thread = threading.Thread(target=self.search_impl, name=None,  args=())
-        thread.start()   
+
     def message_question(self):
         QMessageBox.about(self, "反馈问题", "不行，我没有问题，不能反馈")
     def message_contact(self):
         QMessageBox.about(self, "联系我们", "不告诉你，不联系")
     def message_bug(self):
         QMessageBox.about(self, "反馈bug", "不行，我没有bug，不能反馈")
-    def search_impl(self):
-        Tw = sch.Trapdoor(key_pres.prikey, self.right_bar_widget_search_input.text())
-        self.right_bar_widget_search_input.setText("")
-        param=list(map(int, str(key_pres.pubkey).replace(')','').replace('(','').replace(',','').split(' ')))
-        Tw = list(map(int, str(Tw).replace(')','').replace('(','').replace(',','').split(' ')))
-        param = param + Tw
-        #TODO:把Tw放在智能合约
-        Contract1 = tosolc.getContract(tosolc.contract1_abi, "0xC6605fd9F15DbF27A115e74C0E94Ebc1ED2eE376")
-        tosolc.createProject(Contract1, self.currentAccount, self.currentPassword, param) #发送请求并创建子合约
-        search_amount = tosolc.getAmount(Contract1, self.currentAccount, self.currentPassword)
-        thread = threading.Thread(target=process_search_impl, name=None,  args=(search_amount, self.currentAccount, self.currentPassword)) 
-        thread.start()
-        cipheri_str = self.s1.recv(4000).decode('utf-8')
-        cipheri = list(map(int, cipheri_str.replace(')','').replace('(','').replace(',','').split(' ')))
-        c1_1=(py_ecc.fields.bn128_FQ(int(cipheri[0])),py_ecc.fields.bn128_FQ(int(cipheri[1])))
-        c1_2=(py_ecc.fields.bn128_FQ2((py_ecc.fields.bn128_FQ(int(cipheri[2])),py_ecc.fields.bn128_FQ(int(cipheri[3]))))\
-            ,py_ecc.fields.bn128_FQ2((py_ecc.fields.bn128_FQ(int(cipheri[4])),py_ecc.fields.bn128_FQ(int(cipheri[5])))))
-        c1_3=bn.FQ12(cipheri[6:18])
-        c1_4=bn.FQ12(cipheri[18:])
-        cipheri = CipherI(c1_1,c1_2,c1_3,c1_4)
-        emptytable = {}
-        m = sch.Dec(cipheri, key_pres.prikey, emptytable)
-        print(m)
-        Contract2Address = tosolc.getProjects(Contract1, self.currentAccount, self.currentPassword)[search_amount-1]
-        Contract2 = tosolc.getContract(tosolc.contract2_abi, Contract2Address)
-        #tosolc.confirm(Contract2,self.currentAccount, self.currentPassword)
+        
 
 def send_data(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5):
     thread = threading.Thread(target=send_data_impl, name=None,  args=(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5)) 
     thread.start() 
 def send_data_impl(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyword5):
     s1.send('file'.encode('utf-8'))
-    key=keygen('AES-128')
+    key=keygen('AES-128').decode('utf-8')
     print(key)
     keyword_list=[]
     if keyword1!='':
@@ -355,7 +407,7 @@ def send_data_impl(s1,s2,fileName,value,keyword1,keyword2,keyword3,keyword4,keyw
         print(len(cipher_data))
         s2.sendall(cipher_data)
         data=f.read(83886080)
-    s2.close()
+    #s2.close()
     with open('filehash', 'a') as f:
         f.write(str(hashtable)+'\n')
 
